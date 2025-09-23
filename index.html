@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Painel de Controle do Robô</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin: 20px;
+  }
+
+  /* Vídeo */
+  #videoContainer {
+    width: 640px;
+    max-width: 90%;
+    height: 360px;
+    margin: 0 auto 40px auto;
+    display: block;
+  }
+
+  #videoContainer iframe {
+    width: 100%;
+    height: 100%;
+    border: 2px solid #333;
+    display: block;
+  }
+
+  /* Joystick */
+  #joystick {
+    width: 200px;
+    max-width: 80%;
+    aspect-ratio: 1;
+    margin: 0 auto 20px auto;
+    background: #eee;
+    border-radius: 50%;
+    display: block;
+    position: relative; /* Essencial para o círculo azul do NippleJS ficar correto */
+  }
+
+  #status {
+    margin-top: 10px;
+    font-weight: bold;
+  }
+
+  /* Botão de desligamento */
+  #btnShutdown {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  #btnShutdown:hover {
+    background-color: #c0392b;
+  }
+</style>
+</head>
+<body>
+
+<h2>Painel de Controle do Robô</h2>
+
+<!-- Vídeo -->
+<div id="videoContainer">
+  <iframe src="https://robo.pedmv.online/cam1/" allowfullscreen></iframe>
+
+</div>
+
+<!-- Joystick -->
+<div id="joystick"></div>
+<div id="status">Conectando ao HiveMQ...</div>
+
+<!-- Botão de desligamento -->
+<button id="btnShutdown">Desligar</button>
+
+<script>
+// Conexão MQTT
+const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+client.on('connect', () => {
+  document.getElementById('status').textContent = '✅ Conectado ao HiveMQ!';
+  console.log('Conectado ao HiveMQ');
+});
+
+client.on('error', (err) => {
+  document.getElementById('status').textContent = '❌ Erro: ' + err.message;
+  console.error('Erro MQTT:', err);
+});
+
+// Joystick responsivo
+const joystickContainer = document.getElementById('joystick');
+const joystickSize = Math.min(joystickContainer.offsetWidth, 200);
+
+const joystick = nipplejs.create({
+  zone: joystickContainer,
+  mode: 'static',
+  position: { left: '50%', top: '50%' },
+  color: 'blue',
+  size: joystickSize
+});
+
+function angleToDirection(angle) {
+  if (angle >= 45 && angle < 135) return 'frente';
+  else if (angle >= 135 && angle < 225) return 'esquerda';
+  else if (angle >= 225 && angle < 315) return 'tras';
+  else return 'direita';
+}
+
+joystick.on('move', (evt, data) => {
+  if (!data.angle || !data.distance) return;
+  const angle = data.angle.degree;
+  const distance = data.distance;
+  const direction = angleToDirection(angle);
+  const speed = Math.min(Math.round(distance * 100 / 75), 100);
+
+  client.publish('robo/comando', JSON.stringify({ direcao: direction, velocidade: speed }));
+  document.getElementById('status').textContent = `→ ${direction.toUpperCase()} | Velocidade: ${speed}`;
+});
+
+joystick.on('end', () => {
+  client.publish('robo/comando', JSON.stringify({ direcao: 'parar', velocidade: 0 }));
+  document.getElementById('status').textContent = '🛑 Parar';
+});
+
+// Botão de desligamento
+document.getElementById('btnShutdown').addEventListener('click', () => {
+  client.publish('robo/shutdown', 'shutdown');
+  alert('⚠️ Comando de desligamento enviado!');
+});
+</script>
+
+</body>
+</html>
+
+<!-- Botão de Dashboard -->
+<a href="http://3.139.102.239:3000/public/dashboard/5ea454c6-7dd4-4d5a-8731-8aec5ff1331a" target="_blank" id="btnDashboard">Georreferenciamento</a>
+
+<style>
+  /* Botão de Dashboard - mesmo estilo do desligamento */
+  #btnDashboard {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #3498db; /* azul para diferenciar do vermelho */
+    color: white;
+    text-decoration: none;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  #btnDashboard:hover {
+    background-color: #2980b9;
+  }
+</style>
