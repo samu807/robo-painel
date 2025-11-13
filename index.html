@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -12,7 +13,6 @@
     margin: 20px;
   }
 
-  /* Vídeo */
   #videoContainer {
     width: 640px;
     max-width: 90%;
@@ -28,37 +28,91 @@
     display: block;
   }
 
-  /* Joystick */
-  #joystick {
+  .joystick {
     width: 200px;
     max-width: 80%;
     aspect-ratio: 1;
-    margin: 0 auto 20px auto;
     background: #eee;
     border-radius: 50%;
-    display: block;
-    position: relative; /* Essencial para o círculo azul do NippleJS ficar correto */
+    position: relative;
+    margin-bottom: 10px;
   }
 
-  #status {
-    margin-top: 10px;
+  #status, #statusPanTilt {
+    margin-top: 5px;
     font-weight: bold;
   }
 
-  /* Botão de desligamento */
-  #btnShutdown {
-    margin-top: 20px;
+  button {
+    margin-top: 10px;
     padding: 10px 20px;
     font-size: 16px;
-    background-color: #e74c3c;
-    color: white;
-    border: none;
     border-radius: 5px;
     cursor: pointer;
+    border: none;
   }
 
-  #btnShutdown:hover {
-    background-color: #c0392b;
+  #btnShutdown {
+    background-color: #e74c3c;
+    color: white;
+  }
+
+  #btnShutdown:hover { background-color: #c0392b; }
+
+  #btnDashboard {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #3498db;
+    color: white;
+    text-decoration: none;
+  }
+
+  #btnDashboard:hover { background-color: #2980b9; }
+
+  .control-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 60px;
+    margin-bottom: 20px;
+  }
+
+  .control-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #keyHint {
+    margin-top: 10px;
+    color: #555;
+    font-size: 14px;
+  }
+
+  .pan-tilt-grid {
+    display: grid;
+    grid-template-columns: 60px 60px 60px;
+    grid-template-rows: 60px 60px 60px;
+    gap: 5px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .pan-tilt-grid button {
+    background-color: #ddd;
+    font-size: 18px;
+  }
+
+  .pan-tilt-grid button:hover {
+    background-color: #bbb;
+  }
+
+  .center-empty {
+    background: transparent;
+    border: none;
+    cursor: default;
   }
 </style>
 </head>
@@ -66,45 +120,60 @@
 
 <h2>Painel de Controle do Robô</h2>
 
-<!-- Vídeo -->
 <div id="videoContainer">
   <iframe src="https://robo.pedmv.online/cam1/" allowfullscreen></iframe>
-
 </div>
 
-<!-- Joystick -->
-<div id="joystick"></div>
-<div id="status">Conectando ao HiveMQ...</div>
+<div class="control-container">
+  <div class="control-column">
+    <h3>Movimentação</h3>
+    <div id="joystick" class="joystick"></div>
+    <div id="status">Conectando...</div>
+    <div id="keyHint">Use W, A, S, D (locomoção) e as setas ↑ ↓ ← → (Pan/Tilt)</div>
+  </div>
 
-<!-- Botão de desligamento -->
+  <div class="control-column">
+    <h3>Pan/Tilt</h3>
+    <div class="pan-tilt-grid">
+      <div></div>
+      <button id="btnUp">⬆️</button>
+      <div></div>
+      <button id="btnLeft">⬅️</button>
+      <button class="center-empty" disabled></button>
+      <button id="btnRight">➡️</button>
+      <div></div>
+      <button id="btnDown">⬇️</button>
+      <div></div>
+    </div>
+    <div id="statusPanTilt">Posição Pan/Tilt: 90 / 90</div>
+  </div>
+</div>
+
 <button id="btnShutdown">Desligar</button>
+<br>
+<a href="http://3.139.102.239:3000/public/dashboard/5ea454c6-7dd4-4d5a-8731-8aec5ff1331a" target="_blank" id="btnDashboard">Georreferenciamento</a>
 
 <script>
-// Conexão MQTT
+// === CONEXÃO MQTT ===
 const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
-
 client.on('connect', () => {
   document.getElementById('status').textContent = '✅ Conectado ao HiveMQ!';
-  console.log('Conectado ao HiveMQ');
 });
-
 client.on('error', (err) => {
   document.getElementById('status').textContent = '❌ Erro: ' + err.message;
-  console.error('Erro MQTT:', err);
 });
 
-// Joystick responsivo
+// === JOYSTICK ===
 const joystickContainer = document.getElementById('joystick');
-const joystickSize = Math.min(joystickContainer.offsetWidth, 200);
-
 const joystick = nipplejs.create({
   zone: joystickContainer,
   mode: 'static',
   position: { left: '50%', top: '50%' },
   color: 'blue',
-  size: joystickSize
+  size: 200
 });
 
+// Função para converter ângulo em direção (opcional, para status visual)
 function angleToDirection(angle) {
   if (angle >= 45 && angle < 135) return 'frente';
   else if (angle >= 135 && angle < 225) return 'esquerda';
@@ -112,23 +181,127 @@ function angleToDirection(angle) {
   else return 'direita';
 }
 
+function enviarComando(direcao, velocidade) {
+  // 🔧 Converte o comando textual para throttle/steer compatível com a Raspberry
+  let throttle = 0, steer = 0;
+  const v = velocidade / 100;
+  switch (direcao) {
+    case 'frente':  throttle = v; break;
+    case 'tras':    throttle = -v; break;
+    case 'esquerda': steer = -v; break;
+    case 'direita':  steer = v; break;
+    case 'parar':    throttle = 0; steer = 0; break;
+  }
+
+  // 🔧 Publica no tópico correto e formato esperado
+  client.publish('robo/command', JSON.stringify({ throttle, steer }));
+}
+
+// === JOYSTICK CONTÍNUO ===
 joystick.on('move', (evt, data) => {
   if (!data.angle || !data.distance) return;
-  const angle = data.angle.degree;
-  const distance = data.distance;
-  const direction = angleToDirection(angle);
-  const speed = Math.min(Math.round(distance * 100 / 75), 100);
 
-  client.publish('robo/comando', JSON.stringify({ direcao: direction, velocidade: speed }));
-  document.getElementById('status').textContent = `→ ${direction.toUpperCase()} | Velocidade: ${speed}`;
+  // Ângulo em radianos (converte graus → radianos)
+  const angleRad = data.angle.radian;
+
+  // Normaliza a distância (máx. 100%)
+  const distanceNorm = Math.min(data.distance / 75, 1);
+
+  // Calcula throttle e steer contínuos
+  // Direção do joystick: 0 rad = direita, π/2 = frente, etc.
+  const throttle = distanceNorm * Math.cos(angleRad - Math.PI / 2); // frente/trás
+  const steer = distanceNorm * Math.sin(angleRad - Math.PI / 2);    // esquerda/direita
+
+  // Publica valores contínuos no MQTT
+  client.publish('robo/command', JSON.stringify({
+    throttle: parseFloat(throttle.toFixed(2)),
+    steer: parseFloat(steer.toFixed(2))
+  }));
+
+  const velPercent = Math.round(distanceNorm * 100);
+  document.getElementById('status').textContent =
+    `Throttle: ${throttle.toFixed(2)} | Steer: ${steer.toFixed(2)} | Potência: ${velPercent}%`;
 });
 
 joystick.on('end', () => {
-  client.publish('robo/comando', JSON.stringify({ direcao: 'parar', velocidade: 0 }));
+  client.publish('robo/command', JSON.stringify({ throttle: 0, steer: 0 }));
   document.getElementById('status').textContent = '🛑 Parar';
 });
 
-// Botão de desligamento
+
+// === TECLADO (WASD) ===
+const velocidadeFixa = 60;
+let teclaPressionada = null;
+document.addEventListener('keydown', (event) => {
+  if (event.repeat || teclaPressionada === event.key) return;
+  teclaPressionada = event.key.toLowerCase();
+  let direcao = null;
+  switch (teclaPressionada) {
+    case 'w': direcao = 'frente'; break;
+    case 's': direcao = 'tras'; break;
+    case 'a': direcao = 'esquerda'; break;
+    case 'd': direcao = 'direita'; break;
+    case ' ': direcao = 'parar'; break;
+  }
+  if (direcao) {
+    const velocidade = (direcao === 'parar') ? 0 : velocidadeFixa;
+    enviarComando(direcao, velocidade);
+    document.getElementById('status').textContent =
+      (direcao === 'parar') ? '🛑 Parar' : `🎮 ${direcao.toUpperCase()} (Teclado) | Velocidade: ${velocidade}`;
+  }
+});
+
+document.addEventListener('keyup', (event) => {
+  teclaPressionada = null;
+  if (['w','a','s','d'].includes(event.key.toLowerCase())) {
+    enviarComando('parar', 0);
+    document.getElementById('status').textContent = '🛑 Parar';
+  }
+});
+
+// === PAN/TILT ===
+let pan = 90;
+let tilt = 90;
+const passo = 15;
+const statusPanTilt = document.getElementById('statusPanTilt');
+
+function enviarPanTilt() {
+  client.publish('robo/pan', String(pan));
+  client.publish('robo/tilt', String(tilt));
+  statusPanTilt.textContent = `Posição Pan/Tilt: ${pan} / ${tilt}`;
+}
+
+document.getElementById('btnUp').addEventListener('click', () => {
+  tilt = Math.max(0, tilt - passo);
+  enviarPanTilt();
+});
+document.getElementById('btnDown').addEventListener('click', () => {
+  tilt = Math.min(180, tilt + passo);
+  enviarPanTilt();
+});
+
+// 🔄 Inversão dos comandos esquerda/direita
+document.getElementById('btnLeft').addEventListener('click', () => {
+  pan = Math.min(180, pan + passo);  // antes diminuía, agora aumenta
+  enviarPanTilt();
+});
+document.getElementById('btnRight').addEventListener('click', () => {
+  pan = Math.max(0, pan - passo);    // antes aumentava, agora diminui
+  enviarPanTilt();
+});
+
+// Setas do teclado → Pan/Tilt (também invertido no eixo horizontal)
+document.addEventListener('keydown', (event) => {
+  switch (event.key) {
+    case 'ArrowUp': tilt = Math.max(0, tilt - passo); enviarPanTilt(); break;
+    case 'ArrowDown': tilt = Math.min(180, tilt + passo); enviarPanTilt(); break;
+    case 'ArrowLeft': pan = Math.min(180, pan + passo); enviarPanTilt(); break; // invertido
+    case 'ArrowRight': pan = Math.max(0, pan - passo); enviarPanTilt(); break;  // invertido
+  }
+});
+
+
+// === DESLIGAR ===
 document.getElementById('btnShutdown').addEventListener('click', () => {
   client.publish('robo/shutdown', 'shutdown');
   alert('⚠️ Comando de desligamento enviado!');
@@ -138,29 +311,5 @@ document.getElementById('btnShutdown').addEventListener('click', () => {
 </body>
 </html>
 
-<!-- Botão de Dashboard -->
-<http://3.16.150.177:3000/public/dashboard/f2aca777-bf22-4dbb-a79a-afd9507b0716" target="_blank" id="btnDashboard">Georreferenciamento</a>
-
-<style>
-  /* Botão de Dashboard - mesmo estilo do desligamento */
-  #btnDashboard {
-    display: inline-block;
-    margin-top: 10px;
-    padding: 10px 20px;
-    font-size: 16px;
-    background-color: #3498db; /* azul para diferenciar do vermelho */
-    color: white;
-    text-decoration: none;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-  }
-
-  #btnDashboard:hover {
-    background-color: #2980b9;
-  }
-</style>
-
-/* azul para diferenciar do vermelho */
 
 
