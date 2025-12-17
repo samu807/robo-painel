@@ -230,7 +230,7 @@ joystick.on('end', () => {
 
 
 // === TECLADO (WASD) ===
-const velocidadeFixa = 60;
+const velocidadeFixa = 35;
 let teclaPressionada = null;
 document.addEventListener('keydown', (event) => {
   if (event.repeat || teclaPressionada === event.key) return;
@@ -239,8 +239,8 @@ document.addEventListener('keydown', (event) => {
   switch (teclaPressionada) {
     case 'w': direcao = 'frente'; break;
     case 's': direcao = 'tras'; break;
-    case 'a': direcao = 'esquerda'; break;
-    case 'd': direcao = 'direita'; break;
+    case 'd': direcao = 'esquerda'; break;
+    case 'a': direcao = 'direita'; break;
     case ' ': direcao = 'parar'; break;
   }
   if (direcao) {
@@ -310,6 +310,4 @@ document.getElementById('btnShutdown').addEventListener('click', () => {
 
 </body>
 </html>
-
-
 
